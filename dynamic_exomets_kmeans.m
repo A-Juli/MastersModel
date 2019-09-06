@@ -1,4 +1,6 @@
 clear
+close all
+clc
 
 % Evaluation of steady state regions of exometabolic concentrations by
 % k-mean grouping, with evaluation of fit by CHI^2
@@ -9,10 +11,10 @@ clear
 
 
 
-[num txt]=xlsread('IMM_q_calculation_yields_DMFA_S','Data1');
+[num txt]=xlsread('C:\Users\anjuli\Documents\MATLAB\cobratoolbox\CHO\IMM_q_calculation_yields_DMFA_S.xlsx','Data1');
 colour='b';
 
-k=4;
+
 
 
 p=5e-4;
@@ -29,6 +31,7 @@ Vars(:,3)=Vol;
 
 
 % Importing data from Spreadsheets
+
 %Lab daily analysis
 a=[1,1;23,15];
 %HPLC SUG/OA
@@ -70,7 +73,13 @@ Cexp(:,20)=GlutC2(t1:t2,1)';
 % adapted from Ivan's q calculations code, returns a list of metabolite
 % concentrations (Cexp) with associated list of metabolites (Cexpl).
 
+% Start of fitting functionality
+
 % Create interpolated table of reactor variables
+
+
+
+
 
 Interp_Vars(:,1)=xq;
 
@@ -118,6 +127,10 @@ for j=1:size(DeltaC,2)
         q(i,j)=DeltaC(i,j)/Interp_Vars(i,4);
     end
 end
+% evaluate q for the table of differences
+k=1;
+CHI_Flag=0;
+while CHI_Flag==0
 
 [idx,C,sumd,D]=kmeans(q,k);
 
@@ -135,19 +148,17 @@ for j=1:size(q,2)
 end
 
 CHI2=nansum(Diffs,'all');
-dof=499;
-IGQ=gammainc(CHI2,dof);
+dof=499-k;
+IGQ=gammaincinv(CHI2,dof);
 
-% outputs:
-% idx is the cluster assignment for each time span
-% C is the q value for each metabolite for each of the clusters
-% sumd is sum of distances to each cluster, within cluster
-% D is the distances to each centroid from each point
 
-% retreiving the metabolite concentrations from the kmeans data
-% preliminary implementation, depends on all groupings being continuous
 
-% q values are assigned to each interval
+if CHI2<=0.05
+    CHI_Flag=1;
+else
+    k=k+1;
+end
+end
 
 for j=1:size(C,2)
     for i=1:size(idx,1)
@@ -161,41 +172,101 @@ for j=1:size(C,2)
         Ret_C(i,j)=Ret_C(i-1,j)+Ret_DeltaC(i-1,j);
     end
 end
-% fully retrieved set of concentrations
+fprintf('Fitting complete on iteration %u \n',k);
+fprintf('Quality of fit, CHI-squared p-value: %f \n', CHI2);
 
-
-close all
-% validation ouputs
-
-figure(1)
+output_q=input('Would you like to view the fitted curves? (Y/N) \n','s');
+if output_q=='Y'
+    figure(1)
 plot(xq(1:499),idx','o')
 ylabel('Group Assignment');
 xlabel('Time Interval');
 ylim([0,k]);
+    figure(4)
+for i=1:size(Cexp,2)
+    subplot(6,6,i)
+    plot(xq,Interp_Cexp(:,i),'r')
+    hold on
+    plot(xq,Ret_C(:,i),'b')
+    title(Cexpl(i))
+end
+else
+end
+clear output_q
+
+output_q=input('Would you like to save the predicted concentration matrices? \n To save the full set of matrices for debugging / validation input F \n (Y/N/F) \n ','s');
+if output_q=='Y'
+    save('Predicted_Concentrations','Ret_C');
+else
+    if output_q=='F'
+        save('Predicted_Concentractions_Debug','DeltaC','Diffs','idx','Delta_Vars','Interp_Cexp','Interp_Vars','k','Q_Pred','Ret_DeltaC','Ret_C');
+    else
+    end
+end
+
+output_cleanup=input('Would you like to keep the workspace after finishing? (Y/N) \n','s');
+if output_cleanup~='Y'
+    clear
+else
+end
+
+    
+
+% outputs:
+% idx is the cluster assignment for each time span
+% C is the q value for each metabolite for each of the clusters
+% sumd is sum of distances to each cluster, within cluster
+% D is the distances to each centroid from each point
+
+% retreiving the metabolite concentrations from the kmeans data
+% preliminary implementation, depends on all groupings being continuous
+
+% q values are assigned to each interval
+
+
+% fully retrieved set of concentrations
+
+
+
+% validation ouputs
+
+% figure(1)
+% plot(xq(1:499),idx','o')
+% ylabel('Group Assignment');
+% xlabel('Time Interval');
+% ylim([0,k]);
 
 % XQ=linspace(1,500,500);
-figure(2)
-subplot(1,2,1)
-plot(xq,Interp_Cexp(:,1),'r')
-hold on
-plot(xq,Ret_C(:,1),'b')
-legend('b-spline','k-mean derived')
-xlabel('time: hrs')
-ylabel('concentration')
-title('spline vs k-mean derived concentrations')
-ylim([0,30])
-subplot(1,2,2)
-plot(time,Cexp(:,1),'-*')
-xlabel('time: hrs')
-ylabel('concentration')
-title('raw data for concentration')
-ylim([0,30])
+% figure(2)
+% subplot(1,2,1)
+% plot(xq,Interp_Cexp(:,2),'r')
+% hold on
+% plot(xq,Ret_C(:,2),'b')
+% legend('b-spline','k-mean derived')
+% xlabel('time: hrs')
+% ylabel('concentration')
+% title('spline vs k-mean derived concentrations')
+% % ylim([0,30])
+% subplot(1,2,2)
+% plot(time,Cexp(:,2),'-*')
+% xlabel('time: hrs')
+% ylabel('concentration')
+% title('raw data for concentration')
+% ylim([0,30])
 
+% figure(4)
+% for i=1:size(Cexp,2)
+%     subplot(6,6,i)
+%     plot(xq,Interp_Cexp(:,i),'r')
+%     hold on
+%     plot(xq,Ret_C(:,i),'b')
+%     title(Cexpl(i))
+% end
 
-figure(3)
-CT=C';
-bar(CT)
-xlabel('Metabolite no')
-ylabel('Predicted q from k-mean')
+% figure(3)
+% CT=C';
+% bar(CT)
+% xlabel('Metabolite no')
+% ylabel('Predicted q from k-mean')
 % legend('k1','k2','k3','k4')
 
