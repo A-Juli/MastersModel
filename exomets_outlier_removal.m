@@ -32,7 +32,7 @@ for j=1:size(Cexp,2)
     clear EM RM_time ExMet MetTime
     ExMet=Cexp(:,j);
     MetTime=time; 
-    subplot(6,6,j)
+    subplot(6,7,j)
     plot(time,ExMet,'-o b'),
     hold on
     Ex_dir=gradient(ExMet,time);

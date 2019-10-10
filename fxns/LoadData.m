@@ -4,7 +4,7 @@
 
 % function to load experimental data and a metabolic model
 
-function [t,tr,cm,rm,stdev,stdevR,R,Rr,S,metabM,namesR]=LoadData(Cexp,Cexpl,time,spreadsheet,page,Vars,t1,t2,biomass)
+function [t,tr,cm,rm,stdev,stdevR,R,Rr,S,metabM,namesR,Measurements]=LoadData(HPLC,Cexp,Cexpl,time,spreadsheet,page,Vars,t1,t2,biomass)
 
 % sheet='RawData'; %strcat('RawData',num2str(x));
 % [num , txt]= xlsread(excelfile,sheet);
@@ -33,21 +33,20 @@ function [t,tr,cm,rm,stdev,stdevR,R,Rr,S,metabM,namesR]=LoadData(Cexp,Cexpl,time
 
 % New implementation, import data from previous modules
 Measurements(:,1)=time;
-Measurements(:,2)=Vars(:,2);
-Measurements(:,3)=Cexp(:,5);
-Measurements(:,4)=Cexp(:,36);
-Measurements(:,5:24)=Cexp(:,15:34);
-Measurements(:,25)=Cexp(:,6);
-Measurements(:,26)=Cexp(:,7);
-
-[~ , txt]=xlsread(spreadsheet,'RawData');
-metabM(1)=txt(2,16);
-metabM(2)=txt(2,17);
-metabM(3)=txt(2,41);
-metabM(4)={'Biomass[b]'};
-for i=1:22
-    metabM(i+4)=txt(2,(61+(4*(i-1))));
+Measurements(:,2)=Vars(:,2); % VCD
+Measurements(:,3)=Cexp(:,5); % ammonium
+Measurements(:,4)=Cexp(:,36); % Biomass
+Measurements(:,5:31)=Cexp(:,8:34); % Pyruvate to Proline
+if HPLC == 0 % Glucose and Lactate
+Measurements(:,32)=Cexp(:,1); 
+Measurements(:,33)=Cexp(:,2); 
+else
+  Measurements(:,32)=Cexp(:,6); 
+Measurements(:,33)=Cexp(:,7); 
 end
+Measurements(:,34:35)=Cexp(:,37:38); % Na and K
+[~ , txt]=xlsread('C:\Users\anjuli\Documents\MATLAB\cobratoolbox\CHO\IMM_q_calculation_yields_DMFA_S.xlsx','Met_List');
+metabM=txt'; % time
 
 
 
@@ -59,7 +58,7 @@ end
 for j=1:size(metabM,2)
     interp_met=Measurements(:,j);
     missing=find(isnan(interp_met));
-    if isempty(missing)==0
+    if isempty(missing)==0 
     t_missing=time(missing);
     interp_met(:,2)=time;
     interp_met=rmmissing(interp_met);

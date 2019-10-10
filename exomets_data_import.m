@@ -1,8 +1,11 @@
-function [Cexp , Cexpl, time, Vars]=exomets_data_import(spreadsheet,page,t1,t2)
+function [Cexp , Cexpl, time, Vars]=exomets_data_import(spreadsheet,page,t1,t2,biomass_conc)
 
 % [num , txt]=xlsread('C:\Users\anjuli\Documents\MATLAB\cobratoolbox\CHO\IMM_q_calculation_yields_DMFA_S.xlsx','Data1');
 [num , txt]=xlsread(spreadsheet,page);
 
+if (53+t2-1)>=(size(num,1)+1)
+    t2=size(num,1)-(53-1);
+end
 
 
 % t1=4; t2=20;
@@ -24,7 +27,7 @@ a=[1,1;23,15];
 %HPLC SUG/OA
 b=[27,1;49,9];
 %HPLC AA
-c=[53,1;75,20];
+c=[53,1;(53+t2-1),20]; % replace 60 with 75 for default
 
 Datag=num(a(1,1):a(2,1),6);
 Addg=num(a(1,1):a(2,1),14); %after sampling
@@ -58,8 +61,17 @@ Cexp(:,20)=GlutC2(t1:t2,1)';
 Cexp(:,35)=OUR;
 Cexpl(1,35)={'OUR'};
 
+if biomass_conc == 0
 Vars(:,4)=Vars(:,2).*Vars(:,3).*0.36;
 Cexp(:,36)=Vars(:,4);
 Cexpl(1,36)={'Biomass'};
+else
+Vars(:,4)=(Vars(:,2));
+Cexp(:,36)=Vars(:,4);
+Cexpl(1,36)={'Biomass'};
+end
+
+Cexp(:,37:38)=num(t1:t2,9:10);
+Cexpl(37:38)=txt(7,10:11);
 % adapted from Ivan's q calculations code, returns a list of metabolite
 % concentrations (Cexp) with associated list of metabolites (Cexpl).
