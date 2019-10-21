@@ -1,4 +1,4 @@
-function [to,P,V2,C2,SSR,MinCI2,MaxCI2,metabM,namesR]=BDMFA_program(Cexp,Cexpl,time,spreadsheet,page,Vars,t1,t2)
+function [to,P,V2,C2,SSR,MinCI2,MaxCI2,metabM,namesR,Measurements]=BDMFA_program(HPLC,Cexp,Cexpl,time,spreadsheet,page,Vars,t1,t2)
 
 %author Veronica Martinez, The University of Queensland, AIBN
 %19-Jan-2015
@@ -20,7 +20,7 @@ tic
 % Rr (rates measurement matrix), stdevR (standar desviation of data, rates)
 addpath ./fxns 
 
-[t,tr,cm,rm,stdev,stdevR,R,Rr,S,metabM,namesR]=LoadData(Cexp,Cexpl,time,spreadsheet,page,Vars,t1,t2,'b');
+[t,tr,cm,rm,stdev,stdevR,R,Rr,S,metabM,namesR,Measurements]=LoadData(HPLC,Cexp,Cexpl,time,spreadsheet,page,Vars,t1,t2,'b');
 % run YeastExample 
 
 order=3;
