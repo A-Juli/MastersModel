@@ -37,6 +37,8 @@ Measurements(:,2)=Vars(:,2); % VCD
 Measurements(:,3)=Cexp(:,5); % ammonium
 Measurements(:,4)=Cexp(:,36); % Biomass
 Measurements(:,5:31)=Cexp(:,8:34); % Pyruvate to Proline
+ Measurements(:,17)=Cexp(:,3); % TEMP Glutamine switch to bio
+ Measurements(end,17)=NaN;
 if HPLC == 0 % Glucose and Lactate
 Measurements(:,32)=Cexp(:,1); 
 Measurements(:,33)=Cexp(:,2); 
@@ -45,7 +47,7 @@ Measurements(:,32)=Cexp(:,6);
 Measurements(:,33)=Cexp(:,7); 
 end
 Measurements(:,34:35)=Cexp(:,37:38); % Na and K
-[~ , txt]=xlsread('C:\Users\anjuli\Documents\MATLAB\cobratoolbox\CHO\IMM_q_calculation_yields_DMFA_S.xlsx','Met_List');
+[~ , txt]=xlsread('C:\Users\Andre\Documents\MATLAB\cobratoolbox\CHO\IMM_q_calculation_yields_DMFA_S.xlsx','Met_List');
 metabM=txt'; % time
 
 
@@ -56,7 +58,8 @@ for j=1:size(metabM,2)
     interp_met=Measurements(:,j); % import raw/filtered data
     missing=find(isnan(interp_met)); % check for absent datapoints
     if isempty(missing)==0         
-    t_missing=time(missing);      % index missing datapoints by time
+    t_missing(:,1)=time(missing);      % index missing datapoints by time
+    t_missing(:,2)=missing;
     interp_met(:,2)=time;         % add time index to points  
     interp_met(:,3)=[1:1:size(interp_met,1)]; % add global index to points
      % add space for flags
@@ -76,17 +79,22 @@ while Exit_flag==0
     end
 end
 
-if x~=3 % if at least one gap was detected
+if x~=3 || interp_met(1,3)~=1 || interp_met(end,3)~=size(Cexp,1) % if at least one gap was detected
+    
 for y=4:x 
-    clear interp_stage interp_local_time interp_local_vals
+    clear interp_stage interp_local_time interp_local_vals     
+    
     ITP=find(interp_met(:,y)); % The points associated with this interpolation segment by local indexing
-    interp_local_time=interp_met(ITP(1):ITP(2),2);
-    interp_local_vals=interp_met(ITP(1):ITP(2),1);
+    GTP=interp_met(ITP,3);     % globally associated time points
+  
+    
+    interp_local_time=interp_met(find(interp_met(:,3)==GTP(1)):find(interp_met(:,3)==GTP(2)),2);
+    interp_local_vals=interp_met(find(interp_met(:,3)==GTP(1)):find(interp_met(:,3)==GTP(2)),1);
     interp_fn=griddedInterpolant(interp_local_time,interp_local_vals); % create interp fn for this segment
-    T1=interp_met(ITP(1),3); T2=interp_met(ITP(2),3); % identify the start and end points by global indexing
-    T_span=(T2-T1)-1; 
-    T_interp=t_missing(1:T_span);
-    t_missing(1:T_span)=[];
+    T1=GTP(1); T2=GTP(2); % identify the start and end points by global indexing
+%     T_span=(T2-T1)-1; 
+    T_interp=t_missing(find(t_missing(:,2)==T1+1):find(t_missing(:,2)==T2-1),1);
+    t_missing(find(t_missing(:,2)==T1+1):find(t_missing(:,2)==T2-1),:)=[];
     
     interp_stage=interp_fn(T_interp); % recover interpolated values from the function
     if y==4
@@ -94,8 +102,94 @@ for y=4:x
     else
         interp_vals=cat(1,interp_vals,interp_stage);
     end
+   
+end
+
+
+
+Pt_1=interp_met(1,3); Pt_2=interp_met(end,3);
+if Pt_1 ~= 1 % constructs an interpolated segment to replace the front of a curve if missing
+
+    switch Pt_1
+        case 2
+            if interp_met(2,3)==3 
+               interp_local_time=interp_met(1:2,2);
+               interp_local_vals=interp_met(1:2,1);
+               interp_fn=griddedInterpolant(interp_local_time,interp_local_vals);
+               interp_first=interp_fn(time(1));
+               interp_vals=cat(1,interp_first,interp_vals);
+            else
+               interp_local_time(1:2,1)=time(2:3);
+               interp_local_vals(1,1)=interp_met(1,1);
+               interp_local_vals(2,1)=interp_vals(1);
+               interp_fn=griddedInterpolant(interp_local_time,interp_local_vals);
+               interp_first=interp_fn(time(1));
+               interp_vals=cat(1,interp_first,interp_vals);
+            end               
+        otherwise
+           if interp_met(2,3)==interp_met(1,3)+1
+               interp_local_time=interp_met(1:2,2);
+               interp_local_vals=interp_met(1:2,1);
+               interp_fn=griddedInterpolant(interp_local_time,interp_local_vals);
+               T=time(1:interp_met(1,3)-1);
+               interp_first=interp_fn(T);
+               interp_vals=cat(1,interp_first,interp_vals);
+           else
+               interp_local_time=time(interp_met(1,3):interp_met(1,3)+1);
+               interp_local_vals(1,1)=interp_met(1,1);
+               interp_local_vals(2,1)=interp_vals(1);
+               interp_fn=griddedInterpolant(interp_local_time,interp_local_vals);
+               T=time(1:interp_met(1,3)-1);
+               interp_first=interp_fn(T);
+               interp_vals=cat(1,interp_first,interp_vals);
+           end
+    end
+    
     
 end
+
+if Pt_2 ~= size(Cexp,1) % constructs an interpolated segment to replace the end of a curve if missing
+
+    switch Pt_2
+        case size(Cexp,1)-1
+            if interp_met(end-1,3)==size(Cexp,1)-2
+               interp_local_time=interp_met(end-1:end,2);
+               interp_local_vals=interp_met(end-1:end,1);
+               interp_fn=griddedInterpolant(interp_local_time,interp_local_vals);
+               interp_last=interp_fn(time(end));
+               interp_vals=cat(1,interp_vals,interp_last);
+            else
+               interp_local_time(1:2,1)=time(end-2:end-1);
+               interp_local_vals(1,1)=interp_vals(end);
+               interp_local_vals(2,1)=interp_met(end,1);
+               interp_fn=griddedInterpolant(interp_local_time,interp_local_vals);
+               interp_last=interp_fn(time(end));
+               interp_vals=cat(1,interp_vals,interp_last);
+            end               
+        otherwise
+           if interp_met(end-1,3)==interp_met(end,3)-1
+               interp_local_time=interp_met(end-1:end,2);
+               interp_local_vals=interp_met(end-1:end,1);
+               interp_fn=griddedInterpolant(interp_local_time,interp_local_vals);
+               T=time(interp_met(end,3)+1:end);               
+               interp_last=interp_fn(T);
+               interp_vals=cat(1,interp_vals,interp_last);
+           else
+               interp_local_time=time(interp_met(end,3)-1:interp_met(end,3));
+               interp_local_vals(1,1)=interp_vals(end);
+               interp_local_vals(2,1)=interp_met(end,1);
+               interp_fn=griddedInterpolant(interp_local_time,interp_local_vals);
+               T=time(interp_met(end,3)+1:end); 
+               interp_last=interp_fn(T);
+               interp_vals=cat(1,interp_vals,interp_last);
+           end
+    end
+    
+    
+end
+
+
+
 Measurements(missing,j)=interp_vals;
 
 end    
@@ -103,6 +197,7 @@ end
     
     end
      clear interp_met missing t_missing interp_fn interp_vals
+     interp_vals=[];
 end     
  
 % removing unused metabolites, temporary
@@ -142,7 +237,7 @@ namesR={'Oxygen[e]'};
 tr=t;
 
 %Load metabolic model
-[~, Reactions]=xlsread('C:\Users\anjuli\Documents\B-DMFA - generic order\TemperatureShift.xlsx','Model');
+[~, Reactions]=xlsread('C:\Users\Andre\Documents\MATLAB\cobratoolbox\B-DMFA - generic order\TemperatureShift.xlsx','Model');
 [~,Mc,~,~,~,namesc,transport]=reactions(Reactions);
 R=[];
 for i=1:length(metabM)
