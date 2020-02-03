@@ -1,5 +1,5 @@
 %Exometabolomics Unified Procedure
-%Andrei Ligema 2019 DTU
+%Andrei Ligema 2019 Centre for Biosustainability
 clearvars -except model_iCHOv1_S_Base model_BDMFA_Base compSymbolList compNameList EMB MetNum model Cexp_list
 clc
 close all
@@ -25,7 +25,7 @@ model_import=1; % Imports the GSM used, requires SBML in .xml format
 metname_formalise=0; % required for integration & GMEA presumes all input tables share format
                      % constructs a list of metabolites fully consistent
                      % with the used GSM. May be run once as long as the
-                     % output variables are not cleared 
+                     % output variables are not cleared between executions
 % Per-repeat
 Outlier_Removal=1;  % Attempts to remove outliers from isolated datasets by gradient prediction
                     % and frequency domain analysis. Currently integral to
@@ -59,6 +59,9 @@ a=[1,1;23,15];
 b=[27,1;49,9];
 %HPLC AA
 c=[53,1;(53+t2-1),20];
+% Biomass index within measurements list
+BM_idx=36; % not currently utilised
+
 
 % Handle biomass as a concentration (VCD) rather than grams DW
 biomass_conc=0;
@@ -69,6 +72,10 @@ ExTag='ext_b';
 % If not all metabolites measured are available in the model then specify
 % the used ones here
 Util_mets=[5 6 7 12 15:34 36];
+if isempty(Util_mets)==1
+    warning('No involved metabolites specified, default is to assume ALL are present in the used model. If this is not the case please update the variable "Util_mets" with the indices of the utilised metabolites ');
+end
+    
 
 % Outlier removal parameters
 
@@ -119,6 +126,10 @@ end
 
 %     Results=table; % depricated since introduction of parallel
 %     replicates, I should reinstate this at some point
+%     Intention was to output results of each replicate/state as a
+%     structure containing all the relevant progress and final variables in
+%     order to allow for use/debugging without the need to pause
+%     in-progress.
 for I=1:Exp_unique
     
     % replicates marked with the same experiment number are run in parallel
@@ -138,19 +149,26 @@ for I=1:Exp_unique
     % replicates, I should reinstate this at some point
     
     
-    % load experiment metadata
+    % load experiment metadata: 
      spreadsheet=paths{exp_index(1),1};    page=paths{exp_index(1),2};
      [Cexp , Cexpl, time, Vars]=exomets_data_import (spreadsheet,page,t1,t2,biomass_conc,a,b,c);
     %     Output.CexpRaw=Cexp;    Output.Cexp=Cexp;    Output.Cexpl=Cexpl;    Output.time=time;    Output.Vars=Vars;
     
 
+    
+    
     % runs once per experiment to formalise naming conventions
+    % a LOT of variable nightmares start here due to the
+            % mandatory-but-not-really nature of this function
+           
     if metname_formalise == 1 
     [EMB,MetNum,model,Cexp_list]=experiment_initial(metname_formalise,paths,exp_index,t1,t2,biomass_conc,model,ExTag,Util_mets,a,b,c);
     else
-%         EMB=Cexpl;
-%         Cexp_list=[1:length(Cexpl)];
-%         MetNum=[];
+        % set these index variables to default state utilising all
+        % metabolites
+         EMB=Cexpl;
+        Cexp_list=[1:length(Cexpl)];
+         MetNum=[]; % this is fine being empty as long as the user doesn't attempt to interface with a model at any point
     
     end
     
@@ -159,10 +177,9 @@ for I=1:Exp_unique
         
         Cexp_clean=table;
         Vars_clean=table;
-        for U=1:length(exp_index)
-     
-     [Clean_Met,Vars]=outlier_cleaning(exp_index,paths,pre_gradient,pre_gradient_range,exp_weight,Exp_Err,t1,t2,biomass_conc,U,a,b,c);
-        Cexp_clean{1,U}={Clean_Met};
+        for U=1:length(exp_index)  
+     [Clean_Met,Vars]=outlier_cleaning(exp_index,paths,pre_gradient,pre_gradient_range,exp_weight,Exp_Err,t1,t2,biomass_conc,U,a,b,c,Outlier_Removal);
+        Cexp_clean{1,U}={Clean_Met}; 
         Vars_clean{1,U}={Vars};
         
         end
@@ -182,6 +199,9 @@ for I=1:Exp_unique
     %%%%%%%%%%
   if MB_splines == 1 || boundary_integration == 1 
      
+   metname_override=1;   % override switch for cases where the outputs of metname_formalise are added manually by the user or they are carried from a previous run.
+      
+      if metname_formalise==1 || metname_override==1
       for U=1:length(exp_index)
       Cexp=Cexp_clean{1,U}{1,1};
       Vars=Vars_clean{1,U}{1,1};
@@ -189,8 +209,10 @@ for I=1:Exp_unique
      LB=LB_table{1,U}{1,1}; UB=UB_table{1,U}{1,1};
    
       experiment_outcomes(HPLC,Cexp,Cexpl,time,spreadsheet,page,Vars,t1,t2,model,EMB,MetNum,LB,UB,compSymbolList,compNameList,MB_splines,boundary_integration,Headers);
-
-      
+     
+      end
+       else
+          error('Cannot interact with models properly without a formal list of metabolite names and index locations, please eneable metname_formalise or its associated override if a manually inserted list is used');
       end
   end
     
@@ -211,23 +233,30 @@ function [EMB,MetNum,model,Cexp_list]=experiment_initial(metname_formalise,paths
     
         % runs once per cycle to establish a table of metabolites and
         % updates the model to include any misssing metabolites
+        if isempty(Util_mets)==1
+            Util_mets=[1:length(Cexpl)];
+        end
      [EMB,MetNum,model,Cexp_list]=exomets_formal_names (model,Cexpl,ExTag,Util_mets);
      model=model;
     
     
 end
 
-function [Clean_Met,Vars]=outlier_cleaning(exp_index,paths,pre_gradient,pre_gradient_range,exp_weight,Exp_Err,t1,t2,biomass_conc,U,a,b,c)
+function [Clean_Met,Vars]=outlier_cleaning(exp_index,paths,pre_gradient,pre_gradient_range,exp_weight,Exp_Err,t1,t2,biomass_conc,U,a,b,c,Outlier_Removal)
     spreadsheet=paths{exp_index(U),1};    page=paths{exp_index(U),2};
     [Cexp , Cexpl, time, Vars]=exomets_data_import (spreadsheet,page,t1,t2,biomass_conc,a,b,c);  
 
-
+if Outlier_Removal==1
 [Clean_Met]=exomets_outlier_removal(Cexp,Cexpl,time,pre_gradient,pre_gradient_range,exp_weight,Exp_Err);
 
         Output.CexpClean=Clean_Met;
-        Output.Cexp=Clean_Met;
-        Vars(:,4)=Clean_Met(:,36);
-        Clean_Met;
+        Output.Cexp=Clean_Met; % this replicates the cleaned metabolite data for a purpose I can't quite place
+        Vars(:,4)=Clean_Met(:,36); % need to replace this indexing to use an input variable instead of relying on a specific reference to Ivan's experiment layout
+      %  Clean_Met; % Not sure what this is doing or why
+else
+    Output.CexpClean=Cexp;
+    Output.Cexp=Cexp;
+end
 end
 
 function [Q_tables,Q_rates_table,LB_table,UB_table,Q_rates_GMEA,revisedQ]=experiment_clustered(km_thresholding,km_clustering,k,Cexp_clean,Vars_clean,E_th,Cexpl,exp_index,Cexp_list,S,time,model,EMB,MetNum,GMEA_process)

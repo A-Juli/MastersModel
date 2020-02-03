@@ -1,0 +1,5 @@
+03/02/20 Andrei 
+Cleaned up pathways in data retrieval and cleaning to avoid an issue caused by depending on optional modules.
+Added warnings and checks to metabolite utilisation variable
+Fixed the outcomes function to properly require the indexing of model metabolites to experimental listings, and the option to override this requirement if a manually curated index is provided.
+Started setting up modifications that will remove the assumption that Ivan's spreadsheet style is being used (still todo)
